@@ -1,0 +1,87 @@
+server.js:
+
+const express = require('express');
+const mysql = require('mysql2/promise');
+const axios = require('axios');
+const app = express();
+const port = 80;
+
+const dbConfig = {
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'UsersDB',
+    socketPath: '/run/mysqld/mysqld.sock'
+};
+
+app.use(express.json());
+
+app.get('/greeting', (req, res) => {
+    res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Greeting</title>
+      </head>
+      <body>
+        <h1>Hello World!</h1>
+      </body>
+    </html>
+  `);
+});
+
+app.post('/register', async (req, res) => {
+    const {username} = req.body;
+    let connection1 = await mysql.createConnection(dbConfig);
+    await connection1.query("INSERT IGNORE INTO Users (username) VALUES (?)", [username]);
+    await connection1.end();
+    await axios.post('http://35.188.165.114/register-dupe', {username});
+    res.json({success:true});
+});
+
+app.post('/register-dupe', async (req, res) => {
+    const {username} = req.body;
+    let connection = await mysql.createConnection(dbConfig);
+    await connection.query("INSERT IGNORE INTO Users (username) VALUES (?)", [username]);
+    await connection.end();
+    res.json({success:true});
+});
+
+app.get('/list', async (req, res) => {
+    let connection = await mysql.createConnection(dbConfig);
+    const [results] = await connection.query("SELECT username FROM Users");
+    const users1 = results.map(row => row.username);
+    await connection.end();
+    const response = await axios.get('http://35.188.165.114:80/list-dupe');
+    const users2 = response.data.users;
+    const users = [...new Set([...users1, ...users2])];
+    res.json({users});
+});
+
+app.get('/list-dupe', async (req, res) => {
+    let connection = await mysql.createConnection(dbConfig);
+    const [results] = await connection.query("SELECT username FROM Users");
+    const users = results.map(row => row.username);
+    await connection.end();
+    res.json({users});
+});
+
+app.post('/clear', async (req, res) => {
+    let connection = await mysql.createConnection(dbConfig);
+    await connection.query("DELETE FROM Users");
+    await connection.end();
+    await axios.post('http://35.188.165.114:80/clear-dupe');
+    res.json({success:true});
+});
+
+app.post('/clear-dupe', async (req, res) => {
+    let connection = await mysql.createConnection(dbConfig);
+    await connection.query("DELETE FROM Users");
+    await connection.end();
+    res.json({success: true});
+});
+
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Server running on port ${port}`);
+});
+
